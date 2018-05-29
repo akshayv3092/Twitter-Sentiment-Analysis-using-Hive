@@ -1,0 +1,106 @@
+HIVE
+
+
+1. Creating Tweets Table, storing each row as a string 
+	-create table Tweets (tweet string);
+
+2. Loading data to Tweets table 
+	load data local inpath 'Desktop/Tweets.json' into table Tweets;
+
+3. Create Tweets_Master which reads the JSON object from Tweets and seperates each entity into a different column
+    create table Tweets_Master as 
+	select get_json_object(tweet_table.tweet, '$.retweet_count') as retweet_count, 
+	  get_json_object(tweet_table.tweet, '$.created_at') as created_at,
+	  get_json_object(tweet_table.tweet, '$.text') as text,
+	  get_json_object(tweet_table.tweet, '$.id') as id,	
+	  get_json_object(tweet_table.tweet, '$.source') as source,
+	  get_json_object(tweet_table.tweet, '$.in_reply_to_screen_name') as in_reply_to_screen_name,
+	  get_json_object(tweet_table.tweet, '$.user.location') as user_location,
+	  get_json_object(tweet_table.tweet, '$.user.id') as user_id,
+	  get_json_object(tweet_table.tweet, '$.user.id_str') as user_id_str,
+	  get_json_object(tweet_table.tweet, '$.user.name') as user_name,
+	  get_json_object(tweet_table.tweet, '$.user.screen_name') as user_screen_name,
+	  get_json_object(tweet_table.tweet, '$.user.geo_enabled') as user_geo_enabled,
+	  get_json_object(tweet_table.tweet, '$.user.lang') as user_lang,
+	  get_json_object(tweet_table.tweet, '$.user.protected') as user_protected,
+	  get_json_object(tweet_table.tweet, '$.user.verified') as user_verified,
+	  get_json_object(tweet_table.tweet, '$.user.followers_count') as user_followers_count,
+	  get_json_object(tweet_table.tweet, '$.user.friends_count') as user_friends_count,
+	  get_json_object(tweet_table.tweet, '$.user.listed_count') as user_listed_count,
+	  get_json_object(tweet_table.tweet, '$.user.favourites_count') as user_favourites_count,
+	  get_json_object(tweet_table.tweet, '$.user.statuses_count') as user_statuses_count,
+	  get_json_object(tweet_table.tweet, '$.user.profile_background_color') as user_profile_background_color,
+	  get_json_object(tweet_table.tweet, '$.contributors') as contributors,
+	  get_json_object(tweet_table.tweet, '$.is_quote_status') as is_quote_status,
+	  get_json_object(tweet_table.tweet, '$.entities.user_mentions.screen_name') as entities_user_mentions_screen_name,
+	  get_json_object(tweet_table.tweet, '$.entities.user_mentions.name') as entities_user_mentions_name,
+	 get_json_object(tweet_table.tweet, '$.entities.user_mentions.id') as entities_user_mentions_id
+	from Tweets;
+
+4. Creating table htable containing all Hashtags used in tweets. 
+	create table hashtable as 
+	select lower(htag) as htag from tweets_master
+	lateral view explode(split(text, ' ')) b as htag
+	where 
+	htag rlike "^#[a-zA-Z0-9]+$";
+
+5. Create a Freq_Hashtags table, containing hashtags used and respective frequencies.
+	create table Freq_Hashtags  as 
+	select htag as htag, count(htag) as Frequency from htable group by htag; 
+
+6. Create a table to display the date in (YYYY-MM-dd) format. 
+	create table hashtag_dt as
+	select from_unixtime(unix_timestamp(created_at, 'EEE MMM d HH:mm:ss Z yyyy'),'yyyy-MM-dd') as dt,
+	lower(hashtag) as htag from tweets_master
+	lateral view explode(split(text, ' ')) b as htag
+	where created_at is not null
+	and htag rlike "^#[a-zA-Z0-9]+$";
+
+7. Displaying the most trending tweet of the day 
+	select dt as date, htag as hashtag, count (*) as 
+	Frequency from hashtag_dt 
+	GROUP by dt, htag;
+
+8. Display the active States as per the number of tweets
+	select user_location as state, count(*) as 
+	Frequency from Tweets_Master 
+	GROUP by user_location 
+	ORDER BY Frequency;
+
+9. Create a table called Tweet_words containing tweet-id and words of the tweet. The words are split in the column of the table. 
+	create table tweet_words as 
+	select id as id,split(text,' ') as words 
+	from tweets_master;
+
+10. With each split word form a new row retaining the original tweet_id.
+	create table e_words as 
+	select id as id,word from tweet_words 
+	LATERAL VIEW explode(words) w as word;
+
+11. Create a table called ‘dictionarywords’, and import the dictionary file into it. 
+	create table dictionarywords(word string,rating int) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+	LOAD DATA INPATH 'Desktop/Dictionary.txt' into TABLE dictionarywords;
+
+12. Join the dictionary words with the words in the e_words table to get rating for each word. 
+	create table word_join as 
+	select e_words.id,e_words.word,dictionarywords.rating 
+	from e_words LEFT OUTER JOIN dictionarywords ON(e_words.word =dictionarywords.word);
+
+13. Find the average rating for each tweet. Use the AVG() and group by Tweet_id
+	create table rating as 
+	select id, avg(rating) as rating from word_join
+	GROUP BY id
+	ORDER BY rating desc
+
+14. Get the tweet_id, user name and date from Tweets_Master table, create a new table. 
+	create table tweet_uname_dt as
+	select from_unixtime(unix_timestamp(created_at, 'EEE MMM d HH:mm:ss Z yyyy'),'yyyy-MM-dd') as dt, id as id, user_name from tweets_master;
+
+15. Join the above 2 tables to get the tweet_id, user_name, date, rating for every tweet. The results are stored in Tweet_Scored table. 
+	create table tweet_scored as 
+	select tweet_uname_dt.id, user_name, dt, rating 
+	from tweet_uname_dt inner join rating on tweet_uname_dt.id = rating.id;   
+
+16. Displaying the results – Tweet_Id, UserName, Date, Average Rating for each tweet.
+	select * from tweet_scored 
+	ORDER BY rating desc;
