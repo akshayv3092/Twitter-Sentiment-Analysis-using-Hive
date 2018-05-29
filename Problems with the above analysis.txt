@@ -1,0 +1,7 @@
+ Problems with Sentiment Analysis carried above: 
+ 
+1. If there are 2 negative words occurring like (not bad, or no problem), the above approach tends to evaluate the overall tweet as having negative sentiment, although the tweet meant positive. It gets complicated if we have more such occurrences, in the same tweet. 
+2. If the tweeter is sarcastic, then the analysis does not capture the true sentiment of the tweet. 
+3. Abbreviations or misspellings for a word also causes issues because we may not find them in the dictionary. 
+4. Also the sentiment is very subjective of the topic being discussed (Like 'low cost', 'low battery life'). Hence, we must analyse according to the context of the discussion. 
+5. There is a limit to which we can explode words and assign ratings to each word in the tweet, owing to the size of dictionary and the rate at which slangs and idioms are used. If the word occurring in tweet is not in dictionary, it will be assigned null, even if the word carries a positive or negative sentiment.
